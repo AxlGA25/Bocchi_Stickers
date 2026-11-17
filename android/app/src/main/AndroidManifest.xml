@@ -33,9 +33,10 @@
         </activity>
 
         <!-- ContentProvider que expone nuestros paquetes guardados en el almacenamiento de la app -->
+        <!-- ContentProvider que expone nuestros paquetes guardados en el almacenamiento de la app -->
         <provider
             android:name=".StickerContentProvider"
-            android:authorities="${applicationId}.stickercontentprovider"
+            android:authorities="com.axel.sticker_maker.stickercontentprovider"
             android:enabled="true"
             android:exported="true"
             android:readPermission="com.whatsapp.sticker.READ" />

@@ -17,7 +17,6 @@ import java.io.FileNotFoundException
 class StickerContentProvider : ContentProvider() {
 
     companion object {
-        // Nombres exactos de las columnas que exige WhatsApp en su especificación oficial
         const val STICKER_PACK_IDENTIFIER_IN_QUERY = "sticker_pack_identifier"
         const val STICKER_PACK_NAME_IN_QUERY = "sticker_pack_name"
         const val STICKER_PACK_PUBLISHER_IN_QUERY = "sticker_pack_publisher"
@@ -49,23 +48,18 @@ class StickerContentProvider : ContentProvider() {
 
     override fun onCreate(): Boolean {
         val ctx = context ?: return false
-        val authority = "${ctx.packageName}.stickercontentprovider"
+        val authority = ctx.packageName + ".stickercontentprovider"
         matcher = UriMatcher(UriMatcher.NO_MATCH).apply {
             addURI(authority, METADATA, METADATA_CODE)
-            addURI(authority, "$METADATA/*", METADATA_CODE_FOR_SINGLE_PACK)
-            addURI(authority, "$STICKERS/*", STICKERS_CODE)
-            addURI(authority, "$STICKERS_ASSET/*/*", STICKERS_ASSET_CODE)
+            addURI(authority, METADATA + "/*", METADATA_CODE_FOR_SINGLE_PACK)
+            addURI(authority, STICKERS + "/*", STICKERS_CODE)
+            addURI(authority, STICKERS_ASSET + "/*/*", STICKERS_ASSET_CODE)
         }
         return true
     }
 
-    /**
-     * Lee siempre en caliente el archivo whatsapp_packs.json desde la carpeta app_flutter
-     * para que cualquier cambio o nuevo paquete se refleje sin reiniciar la app.
-     */
     private fun loadPacksJson(): JSONArray {
         val ctx = context ?: return JSONArray()
-        // path_provider getApplicationDocumentsDirectory() en Android apunta a <dataDir>/app_flutter
         val appFlutterDir = File(ctx.filesDir.parentFile, "app_flutter")
         val registryFile = File(appFlutterDir, "whatsapp_packs.json")
         if (!registryFile.exists()) return JSONArray()
@@ -91,7 +85,7 @@ class StickerContentProvider : ContentProvider() {
             METADATA_CODE -> getPackForAllStickerPacks(uri)
             METADATA_CODE_FOR_SINGLE_PACK -> getCursorForSingleStickerPack(uri)
             STICKERS_CODE -> getStickersForAStickerPack(uri)
-            else -> throw IllegalArgumentException("URI desconocida: $uri")
+            else -> throw IllegalArgumentException("URI desconocida: " + uri.toString())
         }
     }
 
@@ -148,7 +142,7 @@ class StickerContentProvider : ContentProvider() {
                 .add(pack.optString("privacy_policy_website", ""))
                 .add(pack.optString("license_agreement_website", ""))
                 .add(pack.optString("image_data_version", "1"))
-                .add(0) // avoid_cache = false
+                .add(0)
                 .add(if (pack.optBoolean("animated_sticker_pack", false)) 1 else 0)
         }
 
@@ -200,23 +194,21 @@ class StickerContentProvider : ContentProvider() {
         for (i in 0 until packsArray.length()) {
             val pack = packsArray.getJSONObject(i)
             if (pack.optString("identifier") == identifier) {
-                // Verificamos si WhatsApp está pidiendo el tray icon
                 if (fileName == pack.optString("tray_image_file")) {
                     val trayPath = pack.optString("tray_file_path")
                     val file = File(trayPath)
-                    if (!file.exists()) throw FileNotFoundException("No existe tray icon: $trayPath")
+                    if (!file.exists()) throw FileNotFoundException("No existe tray icon: " + trayPath)
                     val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
                     return AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH)
                 }
 
-                // O si está pidiendo alguno de los stickers del paquete
                 val stickers = pack.optJSONArray("stickers") ?: JSONArray()
                 for (j in 0 until stickers.length()) {
                     val sticker = stickers.getJSONObject(j)
                     if (fileName == sticker.optString("image_file")) {
                         val filePath = sticker.optString("file_path")
                         val file = File(filePath)
-                        if (!file.exists()) throw FileNotFoundException("No existe sticker: $filePath")
+                        if (!file.exists()) throw FileNotFoundException("No existe sticker: " + filePath)
                         val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
                         return AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH)
                     }
@@ -228,16 +220,16 @@ class StickerContentProvider : ContentProvider() {
 
     override fun getType(uri: Uri): String {
         val pkg = context?.packageName ?: "com.axel.sticker_maker"
-        val authority = "$pkg.stickercontentprovider"
+        val authority = pkg + ".stickercontentprovider"
         return when (matcher.match(uri)) {
-            METADATA_CODE -> "vnd.android.cursor.dir/vnd.$authority.$METADATA"
-            METADATA_CODE_FOR_SINGLE_PACK -> "vnd.android.cursor.item/vnd.$authority.$METADATA"
-            STICKERS_CODE -> "vnd.android.cursor.dir/vnd.$authority.$STICKERS"
+            METADATA_CODE -> "vnd.android.cursor.dir/vnd." + authority + "." + METADATA
+            METADATA_CODE_FOR_SINGLE_PACK -> "vnd.android.cursor.item/vnd." + authority + "." + METADATA
+            STICKERS_CODE -> "vnd.android.cursor.dir/vnd." + authority + "." + STICKERS
             STICKERS_ASSET_CODE -> {
                 val last = uri.lastPathSegment ?: ""
                 if (last.endsWith(".png", ignoreCase = true)) "image/png" else "image/webp"
             }
-            else -> throw IllegalArgumentException("URI desconocida: $uri")
+            else -> throw IllegalArgumentException("URI desconocida: " + uri.toString())
         }
     }
 

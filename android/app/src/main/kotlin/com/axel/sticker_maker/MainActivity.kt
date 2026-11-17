@@ -145,7 +145,7 @@ class MainActivity : FlutterActivity() {
                             return@setMethodCallHandler
                         }
 
-                        val authority = "\${applicationContext.packageName}.stickercontentprovider"
+                        val authority = applicationContext.packageName + ".stickercontentprovider"
                         val intent = Intent("com.whatsapp.intent.action.ENABLE_STICKER_PACK").apply {
                             putExtra("sticker_pack_id", identifier)
                             putExtra("sticker_pack_authority", authority)
@@ -153,7 +153,7 @@ class MainActivity : FlutterActivity() {
                         }
 
                         try {
-                            val metadataUri = android.net.Uri.parse("content://\$authority/metadata")
+                            val metadataUri = android.net.Uri.parse("content://" + authority + "/metadata")
                             contentResolver.notifyChange(metadataUri, null)
 
                             pendingResult = result
@@ -179,7 +179,6 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    /// Recorta la imagen al cuadrado central y la centra en un lienzo de 512x512 con margen transparente de 16px
     private fun cropCenterSquare(src: Bitmap, targetSize: Int): Bitmap {
         val minSide = min(src.width, src.height)
         val cropX = (src.width - minSide) / 2
@@ -250,7 +249,7 @@ class MainActivity : FlutterActivity() {
                 res.success(
                     mapOf(
                         "added" to false,
-                        "status" to "unknown_code_\$resultCode"
+                        "status" to "unknown_code_" + resultCode.toString()
                     )
                 )
             }
