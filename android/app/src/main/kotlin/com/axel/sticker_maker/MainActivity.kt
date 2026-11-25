@@ -6,16 +6,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Matrix
-import android.graphics.Paint
 import android.media.MediaMetadataRetriever
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
-import kotlin.math.min
 
 class MainActivity : FlutterActivity() {
 
@@ -85,6 +81,42 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
+                    "extractSingleVideoFrame" -> {
+                        val videoPath = call.argument<String>("videoPath")
+                        val timeMs = call.argument<Int>("timeMs") ?: 0
+                        if (videoPath.isNullOrEmpty()) {
+                            result.error("INVALID_ARGS", "videoPath vacío", null)
+                            return@setMethodCallHandler
+                        }
+                        Thread {
+                            val retriever = MediaMetadataRetriever()
+                            try {
+                                retriever.setDataSource(videoPath)
+                                val timeUs = timeMs.coerceAtLeast(0).toLong() * 1000L
+                                val raw = retriever.getFrameAtTime(
+                                    timeUs,
+                                    MediaMetadataRetriever.OPTION_CLOSEST
+                                ) ?: retriever.getFrameAtTime(timeUs)
+                                if (raw != null) {
+                                    val scaled = scaleKeepingAspect(raw, 512)
+                                    val out = ByteArrayOutputStream()
+                                    scaled.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                                    if (scaled != raw) scaled.recycle()
+                                    raw.recycle()
+                                    runOnUiThread { result.success(out.toByteArray()) }
+                                } else {
+                                    runOnUiThread { result.success(null) }
+                                }
+                            } catch (e: Exception) {
+                                runOnUiThread {
+                                    result.error("FRAME_ERROR", e.message, null)
+                                }
+                            } finally {
+                                retriever.release()
+                            }
+                        }.start()
+                    }
+
                     "extractVideoFrames" -> {
                         val videoPath = call.argument<String>("videoPath")
                         val startMs = call.argument<Int>("startMs") ?: 0
@@ -115,11 +147,11 @@ class MainActivity : FlutterActivity() {
                                     ) ?: retriever.getFrameAtTime(timeUs)
 
                                     if (rawFrame != null) {
-                                        val squareBmp = cropCenterSquare(rawFrame, targetSize)
+                                        val scaledBmp = scaleKeepingAspect(rawFrame, targetSize)
                                         val out = ByteArrayOutputStream()
-                                        squareBmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+                                        scaledBmp.compress(Bitmap.CompressFormat.PNG, 100, out)
                                         framesBytes.add(out.toByteArray())
-                                        if (squareBmp != rawFrame) squareBmp.recycle()
+                                        if (scaledBmp != rawFrame) scaledBmp.recycle()
                                         rawFrame.recycle()
                                     }
                                 }
@@ -133,6 +165,42 @@ class MainActivity : FlutterActivity() {
                                 }
                             } finally {
                                 retriever.release()
+                            }
+                        }.start()
+                    }
+
+                    "createSoundStickerMp4" -> {
+                        val mediaPath = call.argument<String>("mediaPath")
+                            ?: call.argument<String>("imagePath")
+                        val isVideo = call.argument<Boolean>("isVideo") ?: false
+                        val audioPath = call.argument<String>("audioPath")
+                        val startMs = call.argument<Int>("startMs") ?: 0
+                        val maxDurationMs = call.argument<Int>("maxDurationMs") ?: 5000
+                        val cropAlign = call.argument<String>("cropAlign") ?: "center"
+
+                        if (mediaPath.isNullOrEmpty()) {
+                            result.error("INVALID_ARGS", "Falta elegir una imagen o video", null)
+                            return@setMethodCallHandler
+                        }
+
+                        Thread {
+                            try {
+                                val encoder = SoundStickerEncoder(applicationContext)
+                                val savedPath = encoder.createSoundStickerMp4(
+                                    mediaPath = mediaPath,
+                                    isVideo = isVideo,
+                                    audioPath = audioPath,
+                                    startMs = startMs,
+                                    maxDurationMs = maxDurationMs,
+                                    cropAlign = cropAlign
+                                )
+                                runOnUiThread {
+                                    result.success(savedPath)
+                                }
+                            } catch (e: Exception) {
+                                runOnUiThread {
+                                    result.error("SOUND_STICKER_ERROR", e.message, null)
+                                }
                             }
                         }.start()
                     }
@@ -179,28 +247,14 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    private fun cropCenterSquare(src: Bitmap, targetSize: Int): Bitmap {
-        val minSide = min(src.width, src.height)
-        val cropX = (src.width - minSide) / 2
-        val cropY = (src.height - minSide) / 2
+    private fun scaleKeepingAspect(src: Bitmap, maxSide: Int): Bitmap {
+        val largest = maxOf(src.width, src.height)
+        if (largest <= maxSide) return src
 
-        val cropped = Bitmap.createBitmap(src, cropX, cropY, minSide, minSide)
-        val output = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
-
-        val margin = 16f
-        val safeSize = targetSize - (margin * 2f)
-        val scale = safeSize / minSide.toFloat()
-
-        val matrix = Matrix().apply {
-            postScale(scale, scale)
-            postTranslate(margin, margin)
-        }
-
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        canvas.drawBitmap(cropped, matrix, paint)
-        if (cropped != src) cropped.recycle()
-        return output
+        val scale = maxSide.toFloat() / largest.toFloat()
+        val newW = (src.width * scale).toInt().coerceAtLeast(1)
+        val newH = (src.height * scale).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(src, newW, newH, true)
     }
 
     private fun isPackageInstalled(packageName: String): Boolean {

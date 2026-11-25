@@ -8,6 +8,7 @@ import '../../core/theme.dart';
 import '../../data/models/sticker_pack.dart';
 import '../../providers/packs_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../editor/sound_sticker_screen.dart';
 import '../pack/pack_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -181,7 +182,6 @@ class HomeScreen extends ConsumerWidget {
                         horizontal: 14,
                         vertical: 4,
                       ),
-                      // Avatar limpio sin emoji encima de la cara
                       leading: Container(
                         width: 48,
                         height: 48,
@@ -382,7 +382,6 @@ class HomeScreen extends ConsumerWidget {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
-          // Botón compacto con la carita de la integrante activa (sin desbordar el AppBar)
           InkWell(
             borderRadius: BorderRadius.circular(20),
             onTap: () => _showThemePickerSheet(context, ref),
@@ -422,6 +421,18 @@ class HomeScreen extends ConsumerWidget {
                 ],
               ),
             ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.volume_up_rounded),
+            tooltip: 'Sticker con Sonido (MP4)',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const SoundStickerScreen(),
+                ),
+              );
+            },
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.backup_outlined),
@@ -495,7 +506,6 @@ class HomeScreen extends ConsumerWidget {
 
           return CustomScrollView(
             slivers: [
-              // Banner superior personalizado con la integrante activa de Kessoku Band
               SliverToBoxAdapter(
                 child: _KessokuHeroBanner(
                   member: activeMember,
@@ -504,7 +514,6 @@ class HomeScreen extends ConsumerWidget {
                   onTapCharacter: () => _showThemePickerSheet(context, ref),
                 ),
               ),
-
               if (packs.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -681,7 +690,6 @@ class _KessokuHeroBanner extends StatelessWidget {
   }
 }
 
-/// Estado vacío con la monita del tema activo y sin botón duplicado
 class _EmptyPacksState extends StatelessWidget {
   final KessokuMember member;
 
